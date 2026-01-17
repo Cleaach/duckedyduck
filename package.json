@@ -1,14 +1,21 @@
 {
-  "name": "bug-generator",
-  "displayName": "duckityduck",
-  "description": "Injects bugs using AST",
+  "name": "duckedyduck",
+  "displayName": "DuckedyDuck: Reverse Rubber Duck",
+  "description": "The duck listens, breaks your code, and mocks you for it.",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.107.1"
+    "vscode": "^1.96.0"
   },
   "categories": [
     "Other"
   ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "duckedyduck.injectBug",
+        "title": "DuckedyDuck: Sabotage Code"
   "activationEvents": [
     "onCommand:bug-generator.injectBug",
     "onCommand:bug-generator.toggleAutoInject"
@@ -26,40 +33,57 @@
       }
     ],
     "configuration": {
-      "title": "Bug Generator",
+      "title": "DuckedyDuck",
       "properties": {
-        "bug-generator.bugsPerRun": {
+        "duckedyduck.bugsPerRun": {
           "type": "number",
           "default": 3,
-          "minimum": 1,
-          "maximum": 10,
-          "description": "How many distinct bugs to inject per run (stops early if no more mutations are found)."
+          "description": "How many bugs the duck inserts at once."
+        },
+        "duckedyduck.llmApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API Key for the roasting AI (OpenAI, etc.). Leave empty for generic insults."
+        },
+        "duckedyduck.llmEndpoint": {
+          "type": "string",
+          "default": "https://api.openai.com/v1/chat/completions",
+          "description": "The endpoint for the roasting AI."
         }
       }
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
   },
   "devDependencies": {
+    "@types/babel__generator": "^7.6.8",
+    "@types/babel__traverse": "^7.20.5",
     "@types/mocha": "^10.0.10",
-    "@types/node": "22.x",
-    "@types/vscode": "^1.108.1",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2",
-    "eslint": "^9.39.2",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.52.0"
+    "@types/node": "20.x",
+    "@types/vscode": "^1.96.0",
+    "@typescript-eslint/eslint-plugin": "^8.17.0",
+    "@typescript-eslint/parser": "^8.17.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.16.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.7.2",
+    "webpack": "^5.95.0",
+    "webpack-cli": "^5.1.4"
   },
   "dependencies": {
-    "@babel/generator": "^7.28.6",
-    "@babel/parser": "^7.28.6",
-    "@babel/traverse": "^7.28.6",
-    "@babel/types": "^7.28.6"
+    "@babel/generator": "^7.26.5",
+    "@babel/parser": "^7.26.5",
+    "@babel/traverse": "^7.26.5",
+    "@babel/types": "^7.26.5"
   }
 }
