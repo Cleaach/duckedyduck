@@ -4,6 +4,27 @@ import { getDuckRoast } from './roaster';
 
 // --- STATE ---
 let pendingRoast: string | null = null;
+import * as vscode from "vscode";
+import { parse } from "@babel/parser";
+import traverse from "@babel/traverse";
+import generate from "@babel/generator";
+import * as t from "@babel/types";
+
+type BugKind =
+  | "booleanNegation"
+  | "offByOne"
+  | "logicalAndOrSwap"
+  | "comparisonDirectionFlip"
+  | "equalityInequalityFlip"
+  | "invertTernaryBranches"
+  | "wrongArithmeticOperator"
+  | "bitwiseLogicalSwap"
+  | "indexOffByOne"
+  | "generalBoundaryOffByOne";
+
+type MutationResult =
+  | { mutated: true; kind: BugKind }
+  | { mutated: false; kind?: undefined };
 
 // --- HELPERS ---
 function getBugsPerRun(): number {

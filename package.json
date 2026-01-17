@@ -16,6 +16,20 @@
       {
         "command": "duckedyduck.injectBug",
         "title": "DuckedyDuck: Sabotage Code"
+  "activationEvents": [
+    "onCommand:bug-generator.injectBug",
+    "onCommand:bug-generator.toggleAutoInject"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "bug-generator.injectBug",
+        "title": "Inject Bug (AST)"
+      },
+      {
+        "command": "bug-generator.toggleAutoInject",
+        "title": "Toggle Auto Inject on Save"
       }
     ],
     "configuration": {
