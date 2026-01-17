@@ -4,16 +4,14 @@ import { getDuckRoast } from "./roaster";
 
 // --- STATE ---
 let pendingRoast: string | null = null;
-
 let autoInjectEnabled = false;
-let duckEditing = false;
+let duckEditing = false; // Flag to prevent infinite save loops
 
-import { parse } from "@babel/parser";
-import traverse from "@babel/traverse";
-import generate from "@babel/generator";
-import * as t from "@babel/types";
-
+// --- TYPES ---
+// Must match the types in injector.ts
 type BugKind =
+  | "homoglyphSabotage" // 🆕
+  | "scopeGaslighting"  // 🆕
   | "booleanNegation"
   | "offByOne"
   | "logicalAndOrSwap"
@@ -24,10 +22,6 @@ type BugKind =
   | "bitwiseLogicalSwap"
   | "indexOffByOne"
   | "generalBoundaryOffByOne";
-
-type MutationResult =
-  | { mutated: true; kind: BugKind }
-  | { mutated: false; kind?: undefined };
 
 type DuckHistoryEntry = {
   id: string;
@@ -42,6 +36,8 @@ type DuckHistoryEntry = {
 };
 
 const HISTORY_KEY = "duckedyduck.history";
+
+// --- HISTORY HELPERS ---
 
 function getChangedLineRange(before: string, after: string) {
   if (before === after) return null;
@@ -94,7 +90,7 @@ async function appendHistoryToWorkspaceFile(block: string) {
     const buf = await vscode.workspace.fs.readFile(fileUri);
     existing = Buffer.from(buf).toString("utf8");
   } catch {
-    // no file yet, ok
+    // no file yet, that's fine
   }
 
   await vscode.workspace.fs.writeFile(
@@ -102,6 +98,7 @@ async function appendHistoryToWorkspaceFile(block: string) {
     Buffer.from(existing + block, "utf8"),
   );
 }
+
 async function recordDuckHistory(
   context: vscode.ExtensionContext,
   editor: vscode.TextEditor,
@@ -127,18 +124,18 @@ async function recordDuckHistory(
     afterSnippet,
   };
 
-  // ✅ save in globalState (your popup history)
+  // 1. Save in globalState (for internal tracking/popups)
   const history = context.globalState.get<DuckHistoryEntry[]>(HISTORY_KEY, []);
   history.unshift(entry);
   await context.globalState.update(HISTORY_KEY, history.slice(0, 50));
 
-  // ✅ ALSO append to a real file (.duckedyduck/history.md)
+  // 2. Append to the visible .duckedyduck/history.md file
   const mdBlock = `
 
 ---
 
 ## 🦆 Duck Attack (${new Date(entry.time).toLocaleString()})
-**File:** \`${entry.filePath.split("/").pop()}\`  
+**File:** \`${entry.filePath.split(/[/\\]/).pop()}\`  
 **Lines:** ${entry.startLine}–${entry.endLine}  
 **Bugs:** ${entry.bugs.join(", ")}
 
@@ -156,7 +153,8 @@ ${entry.afterSnippet}
   await appendHistoryToWorkspaceFile(mdBlock);
 }
 
-// --- HELPERS ---
+// --- EDITOR HELPERS ---
+
 function getBugsPerRun(): number {
   const n = vscode.workspace
     .getConfiguration("duckedyduck")
@@ -166,8 +164,10 @@ function getBugsPerRun(): number {
 
 function getActiveEditor(): vscode.TextEditor | undefined {
   const editor = vscode.window.activeTextEditor;
-  if (!editor)
+  if (!editor) {
     void vscode.window.showInformationMessage("No active editor found.");
+    return undefined;
+  }
   return editor;
 }
 
@@ -198,37 +198,11 @@ async function replaceEditorContents(
   return editor.edit((editBuilder) => editBuilder.replace(fullRange, output));
 }
 
-async function openDuckHistoryFile() {
-  const ws = vscode.workspace.workspaceFolders?.[0];
-  if (!ws) {
-    vscode.window.showInformationMessage(
-      "🦆 Open a folder first to create history.md",
-    );
-    return;
-  }
-
-  const dirUri = vscode.Uri.joinPath(ws.uri, ".duckedyduck");
-  const fileUri = vscode.Uri.joinPath(dirUri, "history.md");
-
-  // Ensure folder exists
-  await vscode.workspace.fs.createDirectory(dirUri);
-
-  // Ensure file exists
-  try {
-    await vscode.workspace.fs.stat(fileUri);
-  } catch {
-    await vscode.workspace.fs.writeFile(
-      fileUri,
-      Buffer.from("# 🦆 Duck History\n", "utf8"),
-    );
-  }
-
-  const doc = await vscode.workspace.openTextDocument(fileUri);
-  await vscode.window.showTextDocument(doc, { preview: true });
-}
-
 // --- ACTIVATION ---
+
 export function activate(context: vscode.ExtensionContext) {
+  
+  // COMMAND: Toggle Auto-Inject
   const toggleAutoInject = vscode.commands.registerCommand(
     "duckedyduck.toggleAutoInject",
     () => {
@@ -239,10 +213,8 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  context.subscriptions.push(toggleAutoInject);
-
-  // 1. INJECT COMMAND
-  const disposable = vscode.commands.registerCommand(
+  // COMMAND: Manual Inject
+  const injectBugCommand = vscode.commands.registerCommand(
     "duckedyduck.injectBug",
     async () => {
       const editor = getActiveEditor();
@@ -251,7 +223,6 @@ export function activate(context: vscode.ExtensionContext) {
       const code = editor.document.getText();
 
       try {
-        // Use the separate injector module
         const result = injectBugs(code, getBugsPerRun());
 
         if (result.applied.length === 0) {
@@ -276,7 +247,7 @@ export function activate(context: vscode.ExtensionContext) {
           result.applied,
         );
 
-        // Trigger Roaster
+        // Notify and Roast
         vscode.window.setStatusBarMessage(
           `$(bug) The Duck is watching...`,
           5000,
@@ -290,6 +261,7 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
+  // COMMAND: Clear History
   const clearHistory = vscode.commands.registerCommand(
     "duckedyduck.clearHistory",
     async () => {
@@ -300,7 +272,7 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  context.subscriptions.push(clearHistory);
+  // COMMAND: Show History
   const showHistory = vscode.commands.registerCommand(
     "duckedyduck.showHistory",
     async () => {
@@ -315,7 +287,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       await vscode.workspace.fs.createDirectory(dirUri);
 
-      // create the file if it doesn't exist yet
+      // Create file if missing
       try {
         await vscode.workspace.fs.stat(fileUri);
       } catch {
@@ -330,7 +302,7 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  // 2. DEBUG TRAP
+  // EVENT: Debug Trap (F5)
   const debugListener = vscode.debug.onDidStartDebugSession(async () => {
     if (pendingRoast) {
       vscode.window.showWarningMessage(
@@ -342,20 +314,20 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  // 3. SAVE TRAP
+  // EVENT: Save Trap (Ctrl+S)
+  // EVENT: Save Trap (Ctrl+S)
   const autoSaveListener = vscode.workspace.onDidSaveTextDocument(
     async (doc) => {
-      // still roast on save if needed
+      // 1. Deliver pending roast if it exists
       if (pendingRoast && vscode.window.activeTextEditor?.document === doc) {
         vscode.window.showWarningMessage(`🦆 QUACK: ${pendingRoast}`);
         pendingRoast = null;
       }
 
-      // auto sabotage logic
+      // 2. Auto-Sabotage Logic
       if (!autoInjectEnabled) return;
-      if (duckEditing) return;
+      if (duckEditing) return; // Don't react to our own edits
 
-      // only sabotage JS/TS files
       if (
         doc.languageId !== "javascript" &&
         doc.languageId !== "typescript" &&
@@ -365,8 +337,7 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      // DO NOT sabotage duck history file 💀
-      if (doc.fileName.includes(".duckedyduck/history.md")) return;
+      if (doc.fileName.includes(".duckedyduck")) return;
 
       const editor = vscode.window.activeTextEditor;
       if (!editor) return;
@@ -375,7 +346,10 @@ export function activate(context: vscode.ExtensionContext) {
       const before = doc.getText();
 
       try {
-        const result = injectBugs(before, 1); // ✅ subtle: 1 bug per save
+        // 🔥 UPDATE: Inject 1 to 3 bugs randomly, heavily weighted towards nasty ones
+        const bugCount = Math.floor(Math.random() * 3) + 1;
+        const result = injectBugs(before, bugCount); 
+        
         if (result.applied.length === 0) return;
 
         const after = normalizeAndPreserveFormatting(
@@ -386,27 +360,26 @@ export function activate(context: vscode.ExtensionContext) {
 
         if (after === before) return;
 
+        // Apply Edit
         duckEditing = true;
-
         const fullRange = new vscode.Range(
           doc.positionAt(0),
           doc.positionAt(before.length),
         );
-
         await editor.edit((eb) => {
           eb.replace(fullRange, after);
         });
-
         duckEditing = false;
 
+        // Record & Notify
         await recordDuckHistory(context, editor, before, after, result.applied);
 
         vscode.window.setStatusBarMessage(
-          `🦆 Auto-sabotaged on save: ${result.applied.join(", ")}`,
-          2500,
+          `🦆 Auto-sabotaged: ${result.applied.join(", ")}`,
+          3000,
         );
 
-        // prep next roast
+        // Queue roast for next action
         getDuckRoast(result.applied).then((roast) => {
           pendingRoast = roast;
         });
@@ -418,7 +391,9 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    disposable,
+    toggleAutoInject,
+    injectBugCommand,
+    clearHistory,
     showHistory,
     debugListener,
     autoSaveListener,
