@@ -4,6 +4,10 @@ import { getDuckRoast } from "./roaster";
 
 // --- STATE ---
 let pendingRoast: string | null = null;
+
+let autoInjectEnabled = false;
+let duckEditing = false;
+
 import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
 import generate from "@babel/generator";
@@ -225,6 +229,18 @@ async function openDuckHistoryFile() {
 
 // --- ACTIVATION ---
 export function activate(context: vscode.ExtensionContext) {
+  const toggleAutoInject = vscode.commands.registerCommand(
+    "duckedyduck.toggleAutoInject",
+    () => {
+      autoInjectEnabled = !autoInjectEnabled;
+      vscode.window.showInformationMessage(
+        `🦆 Auto Sabotage on Save: ${autoInjectEnabled ? "ON" : "OFF"}`,
+      );
+    },
+  );
+
+  context.subscriptions.push(toggleAutoInject);
+
   // 1. INJECT COMMAND
   const disposable = vscode.commands.registerCommand(
     "duckedyduck.injectBug",
@@ -327,18 +343,85 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   // 3. SAVE TRAP
-  const saveListener = vscode.workspace.onDidSaveTextDocument((doc) => {
-    if (pendingRoast && vscode.window.activeTextEditor?.document === doc) {
-      vscode.window.showWarningMessage(`🦆 QUACK: ${pendingRoast}`);
-      pendingRoast = null;
-    }
-  });
+  const autoSaveListener = vscode.workspace.onDidSaveTextDocument(
+    async (doc) => {
+      // still roast on save if needed
+      if (pendingRoast && vscode.window.activeTextEditor?.document === doc) {
+        vscode.window.showWarningMessage(`🦆 QUACK: ${pendingRoast}`);
+        pendingRoast = null;
+      }
+
+      // auto sabotage logic
+      if (!autoInjectEnabled) return;
+      if (duckEditing) return;
+
+      // only sabotage JS/TS files
+      if (
+        doc.languageId !== "javascript" &&
+        doc.languageId !== "typescript" &&
+        doc.languageId !== "javascriptreact" &&
+        doc.languageId !== "typescriptreact"
+      ) {
+        return;
+      }
+
+      // DO NOT sabotage duck history file 💀
+      if (doc.fileName.includes(".duckedyduck/history.md")) return;
+
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
+      if (editor.document.uri.toString() !== doc.uri.toString()) return;
+
+      const before = doc.getText();
+
+      try {
+        const result = injectBugs(before, 1); // ✅ subtle: 1 bug per save
+        if (result.applied.length === 0) return;
+
+        const after = normalizeAndPreserveFormatting(
+          result.code,
+          before,
+          doc.eol,
+        );
+
+        if (after === before) return;
+
+        duckEditing = true;
+
+        const fullRange = new vscode.Range(
+          doc.positionAt(0),
+          doc.positionAt(before.length),
+        );
+
+        await editor.edit((eb) => {
+          eb.replace(fullRange, after);
+        });
+
+        duckEditing = false;
+
+        await recordDuckHistory(context, editor, before, after, result.applied);
+
+        vscode.window.setStatusBarMessage(
+          `🦆 Auto-sabotaged on save: ${result.applied.join(", ")}`,
+          2500,
+        );
+
+        // prep next roast
+        getDuckRoast(result.applied).then((roast) => {
+          pendingRoast = roast;
+        });
+      } catch (err) {
+        duckEditing = false;
+        console.error("Auto sabotage failed:", err);
+      }
+    },
+  );
 
   context.subscriptions.push(
     disposable,
     showHistory,
     debugListener,
-    saveListener,
+    autoSaveListener,
   );
 }
 

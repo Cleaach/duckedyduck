@@ -26,6 +26,10 @@
       {
         "command": "duckedyduck.clearHistory",
         "title": "DuckedyDuck: Clear Duck History"
+      },
+      {
+        "command": "duckedyduck.toggleAutoInject",
+        "title": "DuckedyDuck: Toggle Auto Sabotage on Save"
       }
     ],
     "configuration": {
