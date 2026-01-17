@@ -9,13 +9,23 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "*"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "duckedyduck.injectBug",
         "title": "DuckedyDuck: Sabotage Code"
+      },
+      {
+        "command": "duckedyduck.showHistory",
+        "title": "DuckedyDuck: Show Duck Attack History"
+      },
+      {
+        "command": "duckedyduck.clearHistory",
+        "title": "DuckedyDuck: Clear Duck History"
       }
     ],
     "configuration": {
