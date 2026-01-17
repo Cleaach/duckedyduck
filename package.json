@@ -4,7 +4,7 @@
   "description": "Injects bugs using AST",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.108.1"
+    "vscode": "^1.107.1"
   },
   "categories": [
     "Other"
