@@ -1,26 +1,51 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import { parse } from '@babel/parser';
+import traverse from '@babel/traverse';
+import generate from '@babel/generator';
+import * as t from '@babel/types';
 
-// This method is called when your extension is activated
-// Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
+  const disposable = vscode.commands.registerCommand(
+    'bug-generator.injectBug',
+    () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) return;
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
-	console.log('Congratulations, your extension "bug-generator" is now active!');
+      const code = editor.document.getText();
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	const disposable = vscode.commands.registerCommand('bug-generator.helloWorld', () => {
-		// The code you place here will be executed every time your command is executed
-		// Display a message box to the user
-		vscode.window.showInformationMessage('Hello World from duckityduck!');
-	});
+      // 1. Parse
+      const ast = parse(code, {
+        sourceType: 'module',
+        plugins: ['typescript'],
+      });
 
-	context.subscriptions.push(disposable);
+      // 2. Mutate: i < n → i <= n
+      traverse(ast, {
+        ForStatement(path) {
+          const test = path.node.test;
+          if (
+            t.isBinaryExpression(test) &&
+            test.operator === '<'
+          ) {
+            test.operator = '<=';
+            path.stop();
+          }
+        }
+      });
+
+      // 3. Generate code
+      const output = generate(ast).code;
+
+      // 4. Replace editor contents
+      editor.edit(editBuilder => {
+        const fullRange = new vscode.Range(
+          editor.document.positionAt(0),
+          editor.document.positionAt(code.length)
+        );
+        editBuilder.replace(fullRange, output);
+      });
+    }
+  );
+
+  context.subscriptions.push(disposable);
 }
-
-// This method is called when your extension is deactivated
-export function deactivate() {}
