@@ -4,7 +4,6 @@ import { getDuckRoast } from './roaster';
 
 // --- STATE ---
 let pendingRoast: string | null = null;
-import * as vscode from "vscode";
 import { parse } from "@babel/parser";
 import traverse from "@babel/traverse";
 import generate from "@babel/generator";
